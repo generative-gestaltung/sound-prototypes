@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+  </head>
+
+<script>
+
+	function dbToAmp (adb) {
+		return Math.pow(10, adb/20);
+	}
+
+	function blend (x0, x1, t) {
+		return x0*(1-t) + x1*t;
+	}
+
+	function osc (ph, N) {
+		var ret = 0;
+		for (var i=1; i<N+1; i++)
+		ret += Math.sin(ph*i) / i;
+		return ret;
+	}
+
+	function sign (v) {
+		if (v<0) return -1;
+		return 1;
+	}
+
+	var filter;
+	var filter2;
+	var phz = 0;
+	function osc2 (ph) {
+	
+		phz += ph;
+		if (phz>255) phz = 0;
+		var p0 = Math.floor(phz);
+		var p1 = (p0+1)%256;
+		var t = phz-p0;
+
+		var w0 = WAVETABLE[s][p0];
+		var w1 = WAVETABLE[s][p1];
+		return blend (w0, w1, t);
+	}
+
+	var W0 = [];
+	var W1 = [];
+	var s = 0;
+
+	for (var i=0; i<256; i++) {
+		W0[i] = sign(Math.sin(Math.PI*2*i/256));
+		W1[i] = Math.abs(Math.sin(Math.PI*4*i/256))*2-1;
+		W1[i] += Math.abs(Math.sin(Math.PI*6*i/256))*2-1;
+	}
+
+	var WAVETABLE = [];
+	for (var i=0; i<256; i++) {
+		WAVETABLE[i] = [];
+		for (var j=0; j<256; j++) {
+			WAVETABLE[i][j] = blend(W0[j], W1[j], i/256); 
+		}
+	}
+	
+
+	var canvas;
+	var context;
+	var cnt = 0;
+	var SCOPE_RES = 512;
+
+	var dphi = 1; //Math.PI/44000.0
+	var t = 0;
+
+
+	var draw = function() {
+
+		context.fillStyle = "#000";
+		context.fillRect(0,0,canvas.width,canvas.height);
+
+
+		context.fillStyle = "#fff";
+		context.strokeStyle = "#fff";
+		context.lineWidth = 2;
+
+
+		for (var i=0; i<256; i++) {
+			//context.lineTo(i*2, 200+WAVETABLE[s][i]*100);
+			context.fillRect(i*2,100+WAVETABLE[s][i]*100,2,2);
+		}
+		//context.stroke();
+
+		s = s+1
+		if (s>255) s = 0;
+
+		requestAnimationFrame(draw);
+	}
+
+
+ 	var phd = 0;
+	var myPCMSource = function () {
+    		//return osc3 (1, dphi, a, b, t).v;
+    		
+		filter.frequency.value = Math.sin(t)*1600+1600;
+		filter2.frequency.value = Math.sin(t)*1600+1600;
+		t += 0.00003;	
+
+		return osc2(dphi*0.25);
+  	}
+
+	window.onload = function() {
+
+		canvas = document.getElementById("canvas");
+		context = canvas.getContext("2d");
+
+		var audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+		var button = document.querySelector('button');
+
+		// Stereo
+		var channels = 2;
+		var frameCount = audioCtx.sampleRate;
+		var myArrayBuffer = audioCtx.createBuffer(channels, frameCount, audioCtx.sampleRate);
+
+		var bufferSize = 4096;
+		var myPCMProcessingNode = audioCtx.createScriptProcessor(bufferSize, 1, 1);
+
+		filter = audioCtx.createBiquadFilter();
+		filter.type = "lowpass";
+		filter.frequency.value = 1000;
+		filter.gain.value = 25;
+		
+		filter2 = audioCtx.createBiquadFilter();
+		filter2.type = "lowpass";
+		filter2.frequency.value = 1000;
+		filter2.gain.value = 25;
+		filter2.Q.value = 10;
+
+		myPCMProcessingNode.onaudioprocess = function(e) {
+  			var output = e.outputBuffer.getChannelData(0);
+			for (var i = 0; i<bufferSize; i++) {
+     				output[i] = myPCMSource();
+  			}
+		}
+
+		myPCMProcessingNode.connect(filter);
+		filter.connect(filter2);
+		filter2.connect(audioCtx.destination);
+		
+
+	draw();
+}
+</script>
+
+<body>
+	<canvas id="canvas" width="1200" height="500"></canvas>
+
+</body>
+</html>

@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <script src="fft.js"></script>
+  </head>
+
+<script>
+
+	var canvas;
+	var context;
+
+
+	var cnt = 0;
+  var sampleBuffer = null;
+  var cnt = 0;
+  var bufferSize = 1024;
+  var windowStart = 0;
+  var windowSize = 256;
+  var sigma = 4;
+  var env = [];
+  var windowBufferR = [];
+  var windowBufferI = [];
+  var start = 0;
+  var div = 4;
+  var windowProgress = windowSize/div;
+  var specs = [];
+
+  for (var i=0; i<div*2; i++) {
+    specs[i] = {start:i*windowProgress, data:[], dataR:[], dataI:[]};
+    for (var j=0; j<windowSize; j++) {
+      specs[i].dataR[j] = Math.random();
+      specs[i].dataI[j] = Math.random();
+    }
+  }
+
+
+  for (var i=0; i<windowSize; i++) {
+    env[i] = Math.sin(i*Math.PI*2/windowSize+Math.PI*3/2)*0.5+0.5;
+    windowBufferI[i] = 0;
+  }
+
+  var playPos = 0;
+  var start = 0;
+  var cnt = 0;
+  var sum = [];
+
+
+
+  var draw = function() {
+
+		context.fillStyle = "#0f0";
+		context.fillRect(0,0,canvas.width,canvas.height);
+
+/*
+    context.fillStyle = "#fff";
+    context.save();
+    context.translate(20,100);
+    context.scale(1,-1);
+    context.strokeStyle = "#fff";
+
+    context.fillRect(0,0,20,20);
+
+/*
+    var x = Math.floor(playPos/windowSize)*windowSize;
+    context.fillRect(x,0,windowSize,1);
+
+    sum[playPos] = 0;
+    for (var j=0; j<2*div; j++) {
+      if (true || playPos > specs[j].start) {
+        for (var i=0; i<windowSize; i++) {
+          if (true || playPos-specs[j].start>i) {
+            context.fillRect(specs[j].start+i,j*20+env[i]*20-80,1,1);
+          }
+        }
+        sum[playPos] += env[playPos-specs[j].start]*20;
+      }
+      if (playPos > specs[j].start+windowSize) {
+        specs[j].start += 2*windowSize;
+      }
+    }
+
+    for (var i=0; i<playPos; i++)
+      context.fillRect(i, sum[i]-160, 1, 1);
+
+    context.beginPath();
+    context.moveTo(playPos,-80);
+    context.lineTo(playPos,80);
+    context.stroke();
+
+    context.restore();
+*/
+    //playPos = (playPos+0.5)%2000;
+
+    requestAnimationFrame(draw);
+  }
+
+
+
+	window.onload = function() {
+
+		canvas = document.getElementById("canvas");
+		context = canvas.getContext("2d");
+
+
+		var audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+		var button = document.querySelector('button');
+
+		// Stereo
+		var channels = 2;
+		var frameCount = audioCtx.sampleRate;
+		var myArrayBuffer = audioCtx.createBuffer(channels, frameCount, audioCtx.sampleRate);
+
+		var myPCMProcessingNode = audioCtx.createScriptProcessor(bufferSize, 1, 1);
+
+
+
+    var phase = 0;
+    var pos = -1;
+    div = 4;
+
+    function nextSample(data) {
+      pos += 1;
+      var ret = 0;
+
+      for (var i=0; i<div; i++) {
+        var s = specs[i];
+
+        if (pos==s.start+windowSize) {
+          s.start += windowSize*2;
+          for (var j=0; j<windowSize; j++) {
+            s.dataR[j] = data[s.start+j];
+            s.dataI[j] = 0;
+          }
+          transform(s.dataR, s.dataI);
+          inverseTransform(s.dataR, s.dataI);
+        }
+
+        if (pos>=s.start && pos<s.start+windowSize) {
+          ret += s.dataR[pos-s.start]*env[pos-s.start];
+        }
+      }
+      return ret;
+    }
+
+
+		myPCMProcessingNode.onaudioprocess = function(e) {
+      var output = e.outputBuffer.getChannelData(0);
+
+      if (sampleBuffer==null) return;
+      var data = sampleBuffer.getChannelData(0);
+      for (var i=0; i<bufferSize; i++)
+        output[i] = nextSample(data);
+
+/*
+      for (var i=0; i<bufferSize; i++) {
+        output[i] = specs[0].dataR[i];
+
+        pos += 1;
+        if (pos==specs[0].start) {
+          specs[0].start += windowSize;
+          for (var k=0; k<windowSize; k++) {
+            specs[0].dataR[k] = data[specs[0].start+k];
+          }
+        }
+
+
+/*
+        for (var j=0; j<2*div; j++) {
+          //if (pos >= specs[j].start && pos<specs[j].start+windowSize) {
+          //  output[i] += specs[j].dataR[i]; //*env[i];
+          // }
+          output[i] = specs[0].dataR[i];
+
+
+          if (pos == specs[j].start+windowSize) {
+
+            for (var k=0; k<windowSize; k++) {
+              specs[0].dataR[k] = data[k];
+              //pos += 1;
+            }
+            //specs[j].start += windowSize;
+/*
+            for (var i=0; i<windowSize; i++) {
+              specs[j].dataR[i] = Math.random(); //env[i]*data[specs[j].start+i];
+              specs[j].dataI[i] = 0;
+            }
+            //transform(specs[j].dataR, specs[j].dataI);
+            //inverseTransform(specs[j].dataR, specs[j].dataI);
+
+          }
+        }
+      }
+      */
+    }
+		myPCMProcessingNode.connect(audioCtx.destination);
+
+
+
+    var request = new XMLHttpRequest();
+    request.open('GET', 'a33.wav', true);
+    request.responseType = 'arraybuffer';
+
+    request.onload = function() {
+      var audioData = request.response;
+
+      audioCtx.decodeAudioData (audioData, function(buffer) {
+          sampleBuffer = buffer;
+          //console.log(sampleBuffer.getChannelData(0));
+          //source.buffer = buffer;
+          //source.connect(audioCtx.destination);
+          //source.loop = true;
+        },
+        function(e){"Error with decoding audio data" + e.err
+      });
+    }
+
+    request.send();
+
+
+
+	draw();
+}
+</script>
+
+<body>
+	<canvas id="canvas" width="1200" height="500"></canvas>
+</body>
+</html>

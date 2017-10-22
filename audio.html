@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+  </head>
+
+<script>
+
+	var NSPECS = 100;
+	var SPECLEN = 32;
+	var MAX_H = 16;
+	var specs = [];
+
+  for (var i=0; i<NSPECS; i++) {
+		specs[i] = [];
+		for (var j=0; j<SPECLEN; j++) {
+			var h = Math.floor(1*Math.random()*MAX_H)/1+1;
+			specs[i][j] = [h, 0.2/h];
+		}
+	}
+
+	for (var j=0; j<SPECLEN; j++) {
+		specs[0][j] = [0,0];//[j+1, 1/(j+1)];
+		specs[1][j] = [0,0];// [2*j+1, 1/(2*j+1)];
+		specs[2][j] = [0,0];//[(j+1)*2, 1/(2*j+1)];
+    specs[3][j] = [0,0];//
+  }
+
+  var vocals = [
+    [[300, 0],[600, -6],[1200, -9],[1500, -12],[1790, -15]],
+    [[300, 0],[600, -6],[2350, -12],[3250, -11],[3240, -240]],
+    [[609, 0],[1000, -6],[2450, -12],[2700, -11],[3240, -24]],
+    [[400, 0],[1700, -9],[2300, -8],[2900,-11],[3400,-19]],
+    [[238, 0],[1741, -20],[2450, -16],[2900, -20],[4000,-32]],
+    [[325, 0],[700, -12],[2550, -26],[2850, -22],[3100, -28]]
+  ]
+
+  function dbToAmp (adb) {
+      return Math.pow(10, adb/20);
+  }
+
+  for (var s=0; s<4; s++) {
+    var v = vocals[s];
+    for (var i=0; i<5; i++) {
+      specs[s][i] = [v[i][0], dbToAmp(v[i][1])];
+    }
+  }
+
+	function blend (x0, x1, t) {
+		return x0*(1-t) + x1*t;
+	}
+
+	function osc (ph, N) {
+		var ret = 0;
+		for (var i=1; i<N+1; i++)
+		ret += Math.sin(ph*i) / i;
+		return ret;
+	}
+
+	function osc2 (ph, s) {
+		var ret = 0;
+		for (var i=0; i<SPECLEN; i++) {
+			ret += Math.sin(ph*specs[s][i][0])*specs[s][i][1];
+		}
+		return ret;
+	}
+
+	var phases = [[],[]];
+	var phases1 = [[],[]];
+	var phases2 = [[],[]];
+
+	for (var i=0; i<SPECLEN; i++) {
+		phases[0][i] = 0;
+		phases1[0][i] = 0;
+		phases2[0][i] = 0;
+
+		phases[1][i] = 0;
+		phases1[1][i] = 0;
+		phases2[1][i] = 0;
+	}
+
+	function osc3 (obj, dphi, s0, s1, t) {
+
+    var ret = 0;
+		var ret2 = 0;
+		var spec = [];
+
+    for (var i=0; i<SPECLEN; i++) {
+
+			spec[i] = [];
+			phases[obj][i] += (dphi * blend(specs[s0][i][0], specs[s1][i][0], t));
+			phases1[obj][i] += (dphi * specs[s0][i][0]);
+			phases2[obj][i] += (dphi * specs[s1][i][0]);
+
+			spec[i][0] = blend(specs[s0][i][1], specs[s1][i][1], t);
+			spec[i][1] = blend(specs[s0][i][0], specs[s1][i][0], t);
+
+			ret2 += blend (Math.sin(phases1[obj][i])*specs[s0][i][1], Math.sin(phases2[obj][i])*specs[s1][i][1], t);
+			ret += Math.sin(phases[obj][i]); //*spc[1];
+		}
+
+		return {v: ret2, s:spec};
+	}
+
+  var rnd = [];
+  var spread = 25;
+  for (var i=0; i<spread; i++) {
+    var r = i*0.001; //Math.random()*0.4-0.2;
+    r = (i%2)*0.0-0.0; //Math.random()*0.2-0.1;
+    rnd[i] = [1+r, Math.pow(2.1,-(r*r))*0.0004];
+  }
+
+
+  var SP = 0.5;
+  ph4 = [];
+  for (var i=0; i<5; i++) {
+    ph4[i] = [];
+    for (var j=0; j<spread; j++) {
+      ph4[i][j] = 0;
+    }
+  }
+
+
+  var SP2 = 0;
+  function osc4 (dphi, s0) {
+
+    SP2 = Math.sin(SP)*3;
+    SP += 0.00001;
+    var sprF = [];
+    for (var i=0; i<spread; i++) {
+      var r = ((i%2)*SP2-SP2/2)*(i>0);
+      sprF[i] = [1+r, Math.pow(2.4,-(r*r*r*r))*0.001];
+    }
+    //sprF = rnd;
+    var ret = 0;
+    var v = vocals[s0];
+
+    for (var i=0; i<5; i++) {
+      for (var j=0; j<spread; j++) {
+        ret += Math.sin(ph4[i][j]) * v[i][1]*sprF[j][1];
+        ph4[i][j] += dphi*v[i][0]*sprF[j][0];
+      }
+    }
+    return ret;
+  }
+
+
+	var canvas;
+	var context;
+	var cnt = 0;
+	var SCOPE_RES = 512;
+
+
+  var a = 0;
+  var b = 0;
+  var t = 0;
+  var dphi = Math.PI/44000.0
+  var draw = function() {
+
+		context.fillStyle = "#000";
+		context.fillRect(0,0,canvas.width,canvas.height);
+
+		context.fillStyle = "#fff";
+		context.strokeStyle = "#fff";
+		context.lineWidth = 2;
+
+		var x = 20;
+		var y = 160;
+
+    return;
+		context.beginPath();
+		context.moveTo(x,y);
+		context.lineTo(x+SCOPE_RES, y);
+		context.moveTo(x,y);
+
+		var vvv;
+		for (var i=0; i<SCOPE_RES; i++) {
+			vvv = osc3 (0, dphi, a, b, t);
+			context.lineTo (x+i, vvv.v*80+y);
+		}
+		context.stroke();
+
+		context.beginPath();
+		for (var i=0; i<vvv.s.length; i++) {
+			context.moveTo(x+540+vvv.s[i][1]*0.1, y+200);
+			context.lineTo(x+540+vvv.s[i][1]*0.1, y-vvv.s[i][0]*200+200);
+		}
+		context.stroke();
+
+		cnt += 1;
+
+		requestAnimationFrame(draw);
+	}
+
+
+  var phd = 0;
+	var myPCMSource = function () {
+
+		a = 0; //Math.floor(cnt/100)%4;
+		b = 0; //(Math.floor(cnt/100)+1)%4;
+		t = (cnt%100)/100;
+
+    //return osc3 (1, dphi, a, b, t).v;
+    return osc4(dphi*0.4,0);
+  }
+
+	window.onload = function() {
+
+		canvas = document.getElementById("canvas");
+		context = canvas.getContext("2d");
+
+		var audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+		var button = document.querySelector('button');
+
+		// Stereo
+		var channels = 2;
+		var frameCount = audioCtx.sampleRate;
+		var myArrayBuffer = audioCtx.createBuffer(channels, frameCount, audioCtx.sampleRate);
+
+		var bufferSize = 4096;
+		var myPCMProcessingNode = audioCtx.createScriptProcessor(bufferSize, 1, 1);
+
+
+
+		myPCMProcessingNode.onaudioprocess = function(e) {
+  			var output = e.outputBuffer.getChannelData(0);
+			for (var i = 0; i<bufferSize; i++) {
+     				output[i] = myPCMSource();
+  			}
+		}
+
+		myPCMProcessingNode.connect(audioCtx.destination);
+
+
+	draw();
+}
+</script>
+
+<body>
+	<canvas id="canvas" width="1200" height="500"></canvas>
+
+</body>
+</html>

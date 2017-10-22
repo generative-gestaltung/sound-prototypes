@@ -1,0 +1,12 @@
+body {
+  margin: 0;
+  padding: 0;
+  font-family: sans-serif;
+}
+
+.FMSynthMain {
+  color:#00f;
+  background-color:#4f0;
+  padding: 10px;
+  margin:20px;
+}
